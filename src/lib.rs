@@ -1,4 +1,6 @@
-use reqwest::{Client, StatusCode};
+use reqwest::header::LOCATION;
+use reqwest::redirect::Policy;
+use reqwest::{Client, ClientBuilder, StatusCode};
 use serde::Deserialize;
 pub use steamid_ng::SteamID;
 use thiserror::Error;
@@ -48,6 +50,30 @@ pub async fn resolve_vanity_url(url: &str, api_key: &str) -> Result<Option<Steam
     }
 }
 
+pub async fn get_vanity_url(steam_id: SteamID) -> Result<Option<String>, Error> {
+    let response: reqwest::Response = ClientBuilder::new()
+        .redirect(Policy::none())
+        .build()
+        .unwrap()
+        .get(&format!(
+            "https://steamcommunity.com/profiles/{}",
+            u64::from(steam_id)
+        ))
+        .send()
+        .await?;
+
+    Ok(match response.status() {
+        StatusCode::FOUND => response
+            .headers()
+            .into_iter()
+            .find_map(|(name, value)| if name == LOCATION { Some(value) } else { None })
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.split_at("https://steamcommunity.com/id/".len()).1)
+            .map(|value| value.trim_end_matches("/").to_string()),
+        _ => None,
+    })
+}
+
 #[cfg(test)]
 #[tokio::test]
 async fn test_valid() {
@@ -74,6 +100,28 @@ async fn test_not_found() {
     assert_eq!(
         None,
         resolve_vanity_url("hopefully_non_existing_steam_id", &key)
+            .await
+            .unwrap()
+    )
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn test_get_vanity() {
+    assert_eq!(
+        Some("icewind1991".to_string()),
+        get_vanity_url(SteamID::from(76561198024494988))
+            .await
+            .unwrap()
+    )
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn test_get_vanity_not_found() {
+    assert_eq!(
+        None,
+        get_vanity_url(SteamID::from(76561198024494987))
             .await
             .unwrap()
     )
