@@ -13,7 +13,7 @@ struct SteamApiResponse {
 #[derive(Deserialize)]
 struct VanityUrlResponse {
     #[serde(default)]
-    steamid: String,
+    steamid: Option<SteamID>,
     success: u8,
 }
 
@@ -24,7 +24,7 @@ pub enum Error {
     #[error("Error while making request to steam api")]
     Request(#[from] reqwest::Error),
     #[error("Received malformed steam id")]
-    SteamId(#[from] steamid_ng::SteamIDParseError),
+    SteamId(#[from] steamid_ng::SteamIDError),
 }
 
 /// Resolve a steam vanity url to a steam id
@@ -41,13 +41,10 @@ pub async fn resolve_vanity_url(url: &str, api_key: &str) -> Result<Option<Steam
 
     let api_response: SteamApiResponse = response.json().await?;
 
-    if api_response.response.success == 1 {
-        let steam_id: SteamID = api_response.response.steamid.parse()?;
-
-        Ok(Some(steam_id))
-    } else {
-        Ok(None)
-    }
+    Ok(api_response
+        .response
+        .steamid
+        .filter(|_| api_response.response.success == 1))
 }
 
 pub async fn get_vanity_url(steam_id: SteamID) -> Result<Option<String>, Error> {

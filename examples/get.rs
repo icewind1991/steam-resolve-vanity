@@ -1,5 +1,7 @@
+use std::convert::TryFrom;
 use std::env::args;
 use steam_resolve_vanity::get_vanity_url;
+use steamid_ng::SteamID;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -7,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let binary = args.next().unwrap(); // first argument is binary
 
     if let Some(steam_id) = args.next() {
-        if let Some(vanity) = get_vanity_url(steam_id.parse()?).await? {
+        if let Some(vanity) = get_vanity_url(SteamID::try_from(steam_id.as_str())?).await? {
             println!("{}", vanity);
         } else {
             println!("No vanity found for steamid");
